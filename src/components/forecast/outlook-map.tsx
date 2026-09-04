@@ -115,7 +115,7 @@ function ensureHatchPattern(
 function applyPatternFill(layer: L.Path, patternId: string) {
   const el = layer.getElement();
   if (!el || el.tagName.toLowerCase() !== "path") return false;
-  const svg = el.ownerSVGElement;
+  const svg = (el as SVGElement).ownerSVGElement;
   if (!svg) return false;
   el.setAttribute("fill", `url(#${patternId})`);
   el.setAttribute("fill-opacity", "1");
@@ -223,7 +223,7 @@ export function OutlookMap({ mapView, features, legend: _legend }: OutlookMapPro
     const paint = () => {
       const el = layer.getElement();
       if (!el) return;
-      const svg = el.ownerSVGElement;
+      const svg = (el as SVGElement).ownerSVGElement;
       if (!svg) return;
       ensureHatchPattern(
         svg,

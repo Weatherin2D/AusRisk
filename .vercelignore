@@ -1,4 +1,0 @@
-# Keep local/runtime forecast data out of Vercel uploads
-data/current-forecast.json
-.env*
-!.env.example

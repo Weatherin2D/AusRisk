@@ -13,7 +13,7 @@ const OutlookMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full w-full items-center justify-center bg-[#0b1c24]/text-sm text-[#9db8c0]">
+      <div className="flex h-full w-full items-center justify-center bg-neutral-200 text-sm text-neutral-600">
         Loading map…
       </div>
     ),

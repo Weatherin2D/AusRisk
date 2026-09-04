@@ -6,30 +6,39 @@ type Props = {
   items: DisplayLegendItem[];
 };
 
-function swatchBackground(item: DisplayLegendItem): React.CSSProperties {
+function hatchKind(item: DisplayLegendItem): "none" | "l1" | "l2" {
   const hatch = (item.style.hatch ?? "none").toLowerCase();
-  const base: React.CSSProperties = {
-    backgroundColor: item.style.fillColor,
-    opacity: item.style.fillOpacity,
+  const title = item.label.toLowerCase();
+  if (title.includes("l2") || hatch === "crosshatch") return "l2";
+  if (title.includes("l1") || hatch === "diagonal") return "l1";
+  if (hatch !== "none") return "l1";
+  return "none";
+}
+
+function swatchBackground(item: DisplayLegendItem): React.CSSProperties {
+  const kind = hatchKind(item);
+  const fill = item.style.fillColor;
+  const opacity = item.style.fillOpacity;
+
+  if (kind === "none") {
+    return {
+      backgroundColor: fill,
+      opacity,
+    };
+  }
+
+  // L1 thinner stripes, L2 thicker stripes
+  const stripe =
+    kind === "l2"
+      ? "repeating-linear-gradient(135deg, #111 0 3px, transparent 3px 10px)"
+      : "repeating-linear-gradient(135deg, #111 0 1.5px, transparent 1.5px 8px)";
+
+  return {
+    backgroundColor: fill,
+    backgroundImage: stripe,
+    opacity: 1,
+    backgroundBlendMode: "normal",
   };
-
-  if (hatch === "diagonal") {
-    return {
-      ...base,
-      backgroundImage:
-        "repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(0,0,0,0.55) 3px, rgba(0,0,0,0.55) 5px)",
-    };
-  }
-
-  if (hatch === "crosshatch") {
-    return {
-      ...base,
-      backgroundImage:
-        "repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(0,0,0,0.55) 3px, rgba(0,0,0,0.55) 5px), repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.45) 3px, rgba(0,0,0,0.45) 5px)",
-    };
-  }
-
-  return base;
 }
 
 export function RiskLegend({ items }: Props) {

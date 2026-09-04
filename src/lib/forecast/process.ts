@@ -295,9 +295,9 @@ function clampDay(n: number): number {
 }
 
 /**
- * Place uploaded days starting at `targetStartDay` (1–5), merge into any
- * existing cycle, strip PLACEHOLDER legend entries, and stamp Sydney dates.
- * Days beyond day 5 are dropped.
+ * Publish modes:
+ * - replace: wipe cycle and place file days starting at targetStartDay
+ * - single: put only the first file day into targetStartDay; keep other slots
  */
 export function normalizeForecastOnUpload(
   forecast: GfcForecast,
@@ -305,10 +305,12 @@ export function normalizeForecastOnUpload(
     targetStartDay?: number;
     existing?: GfcForecast | null;
     now?: Date;
+    mode?: "replace" | "single";
   } = {},
 ): GfcForecast {
   const today = todaySydney(options.now ?? new Date());
   const targetStartDay = clampDay(options.targetStartDay ?? 1);
+  const mode = options.mode ?? "replace";
 
   const incoming = Object.values(forecast.forecastCycle.days)
     .map((day, index) => ({
@@ -322,22 +324,44 @@ export function normalizeForecastOnUpload(
       return aDay - bDay;
     });
 
-  const mergedDays: Record<string, ForecastDay> = {};
-
-  if (options.existing?.forecastCycle?.days) {
-    for (const [key, day] of Object.entries(options.existing.forecastCycle.days)) {
-      const n = day.day ?? Number(key);
-      if (!Number.isFinite(n) || n < 1 || n > MAX_FORECAST_DAYS) continue;
-      mergedDays[String(n)] = stampDayDates(day, n, today);
-    }
+  if (!incoming.length) {
+    throw new Error("Forecast file has no days to publish.");
   }
 
-  let assigned = 0;
-  for (const item of incoming) {
-    const newDay = targetStartDay + assigned;
-    assigned += 1;
-    if (newDay > MAX_FORECAST_DAYS) break;
-    mergedDays[String(newDay)] = stampDayDates(item.day, newDay, today);
+  const mergedDays: Record<string, ForecastDay> = {};
+
+  if (mode === "single") {
+    if (options.existing?.forecastCycle?.days) {
+      for (const [key, day] of Object.entries(options.existing.forecastCycle.days)) {
+        const n = day.day ?? Number(key);
+        if (!Number.isFinite(n) || n < 1 || n > MAX_FORECAST_DAYS) continue;
+        if (n === targetStartDay) continue;
+        mergedDays[String(n)] = stampDayDates(day, n, today);
+      }
+    }
+    // Prefer the day that has AusRisk custom layers when updating a single slot
+    const preferred =
+      incoming.find((item) =>
+        Boolean(
+          item.day.customLayers?.layers?.some(
+            (layer) => layer.label?.trim().toLowerCase() === "ausrisk",
+          ),
+        ),
+      ) ?? incoming[0];
+    mergedDays[String(targetStartDay)] = stampDayDates(
+      preferred.day,
+      targetStartDay,
+      today,
+    );
+  } else {
+    // Full replace: only days from this file, starting at targetStartDay
+    let assigned = 0;
+    for (const item of incoming) {
+      const newDay = targetStartDay + assigned;
+      assigned += 1;
+      if (newDay > MAX_FORECAST_DAYS) break;
+      mergedDays[String(newDay)] = stampDayDates(item.day, newDay, today);
+    }
   }
 
   const base = options.existing ?? forecast;

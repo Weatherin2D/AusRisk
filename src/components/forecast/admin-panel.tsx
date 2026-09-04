@@ -31,7 +31,9 @@ export function AdminPanel() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [targetDay, setTargetDay] = useState(1);
-  const [replaceAll, setReplaceAll] = useState(false);
+  const [publishMode, setPublishMode] = useState<"replace" | "single">(
+    "replace",
+  );
   const [storedDays, setStoredDays] = useState<StoredDay[]>([]);
   const [manageMessage, setManageMessage] = useState<string | null>(null);
   const [manageError, setManageError] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export function AdminPanel() {
       const form = new FormData();
       form.append("file", file);
       form.append("targetDay", String(targetDay));
-      form.append("replaceAll", String(replaceAll));
+      form.append("mode", publishMode);
       const res = await fetch("/api/admin/upload", {
         method: "POST",
         body: form,
@@ -109,6 +111,7 @@ export function AdminPanel() {
         ok?: boolean;
         dayCount?: number;
         targetStartDay?: number;
+        mode?: string;
         days?: number[];
         error?: string;
       };
@@ -118,7 +121,9 @@ export function AdminPanel() {
       }
       const dayList = (json.days ?? []).join(", ");
       setUploadMessage(
-        `Uploaded as Day ${json.targetStartDay ?? targetDay}. Active days: ${dayList || json.dayCount}. Days roll overnight (max ${MAX_FORECAST_DAYS}).`,
+        publishMode === "single"
+          ? `Updated Day ${json.targetStartDay ?? targetDay} only. Active days: ${dayList || json.dayCount}.`
+          : `Replaced outlook starting at Day ${json.targetStartDay ?? targetDay}. Active days: ${dayList || json.dayCount}.`,
       );
       await refreshDays();
     } catch {
@@ -325,7 +330,7 @@ export function AdminPanel() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="targetDay">Publish starting as</Label>
+                  <Label htmlFor="targetDay">Day slot</Label>
                   <select
                     id="targetDay"
                     value={targetDay}
@@ -339,24 +344,50 @@ export function AdminPanel() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-neutral-500">
-                    Example: pick Day 2 to place the first outlook in the file as
-                    tomorrow. Later days in the file become Day 3, 4, …
-                  </p>
                 </div>
 
-                <label className="flex items-start gap-3 text-sm text-neutral-300">
-                  <input
-                    type="checkbox"
-                    checked={replaceAll}
-                    onChange={(e) => setReplaceAll(e.target.checked)}
-                    className="mt-1"
-                  />
-                  <span>
-                    Replace entire forecast cycle (otherwise merge into existing
-                    days)
-                  </span>
-                </label>
+                <fieldset className="space-y-3 border border-neutral-800 p-3">
+                  <legend className="px-1 text-sm font-medium text-neutral-200">
+                    Publish mode
+                  </legend>
+                  <label className="flex items-start gap-3 text-sm text-neutral-300">
+                    <input
+                      type="radio"
+                      name="publishMode"
+                      checked={publishMode === "replace"}
+                      onChange={() => setPublishMode("replace")}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="font-medium text-white">
+                        Replace outlook
+                      </span>
+                      <span className="mt-0.5 block text-xs text-neutral-500">
+                        Clears previous days. File Day 1 lands on the selected
+                        slot; extra file days fill the next slots only (no
+                        leftover Day 3 from old publishes).
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 text-sm text-neutral-300">
+                    <input
+                      type="radio"
+                      name="publishMode"
+                      checked={publishMode === "single"}
+                      onChange={() => setPublishMode("single")}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="font-medium text-white">
+                        Update one day only
+                      </span>
+                      <span className="mt-0.5 block text-xs text-neutral-500">
+                        Puts the AusRisk layer from the file into the selected
+                        day slot and leaves other days untouched.
+                      </span>
+                    </span>
+                  </label>
+                </fieldset>
 
                 <label
                   onDragOver={(e) => {

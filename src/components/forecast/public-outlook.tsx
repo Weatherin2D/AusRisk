@@ -23,7 +23,15 @@ export function PublicOutlook() {
         const json = (await res.json()) as PublicForecastResponse;
         if (cancelled) return;
         setData(json);
-        setSelectedDay(json.defaultDay);
+        setSelectedDay((prev) => {
+          if (
+            prev != null &&
+            json.days.some((d) => d.effectiveDay === prev)
+          ) {
+            return prev;
+          }
+          return json.defaultDay;
+        });
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load");

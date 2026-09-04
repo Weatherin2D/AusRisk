@@ -23,11 +23,20 @@ type OutlookMapProps = {
   legend: DisplayLegendItem[];
 };
 
+type FeatureProps = {
+  title: string;
+  categoryId: string;
+  featureKey: string;
+  order: number;
+  style: CategoryStyle;
+};
+
+/** Match L1/L2 as whole tokens only — never "Low T-Storm" / similar labels. */
 function hatchKind(style: CategoryStyle, label?: string): "none" | "l1" | "l2" {
   const hatch = (style.hatch ?? "none").toLowerCase();
   const title = (label ?? "").toLowerCase();
-  if (title.includes("l2") || hatch === "crosshatch") return "l2";
-  if (title.includes("l1") || hatch === "diagonal") return "l1";
+  if (/\bl2\b/.test(title) || hatch === "crosshatch") return "l2";
+  if (/\bl1\b/.test(title) || hatch === "diagonal") return "l1";
   if (hatch !== "none") return "l1";
   return "none";
 }
@@ -78,7 +87,6 @@ function ensureHatchPattern(
   pattern.appendChild(bg);
 
   const stripe = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  // Full diagonal across the tile so stripes tile cleanly
   stripe.setAttribute("d", `M0,${size} L${size},0`);
   stripe.setAttribute("stroke", "#111111");
   stripe.setAttribute("stroke-width", String(strokeWidth));
@@ -86,7 +94,6 @@ function ensureHatchPattern(
   stripe.setAttribute("stroke-linecap", "square");
   pattern.appendChild(stripe);
 
-  // Extra parallel line so denser coverage within each tile
   const stripe2 = document.createElementNS(
     "http://www.w3.org/2000/svg",
     "path",
@@ -164,7 +171,6 @@ function pathStyle(feature: DisplayFeature): PathOptions {
       color: feature.style.strokeColor || "#111111",
       weight: feature.style.strokeWidth ?? 2,
       opacity: feature.style.strokeOpacity ?? 1,
-      // Temporary solid fill until pattern is applied on add
       fillColor: feature.style.fillColor || "#898989",
       fillOpacity: 0.15,
       className: `ausrisk-hatch ausrisk-hatch-${kind}`,
@@ -180,7 +186,25 @@ function pathStyle(feature: DisplayFeature): PathOptions {
   };
 }
 
+function propsOf(feature?: GeoJSON.Feature): FeatureProps | null {
+  const raw = feature?.properties as Partial<FeatureProps> | null | undefined;
+  if (!raw?.featureKey || !raw.categoryId || !raw.style) return null;
+  return {
+    title: String(raw.title ?? ""),
+    categoryId: String(raw.categoryId),
+    featureKey: String(raw.featureKey),
+    order: Number(raw.order ?? 0),
+    style: raw.style,
+  };
+}
+
 export function OutlookMap({ mapView, features, legend: _legend }: OutlookMapProps) {
+  const byKey = useMemo(() => {
+    const map = new Map<string, DisplayFeature>();
+    for (const f of features) map.set(f.id, f);
+    return map;
+  }, [features]);
+
   const geojson = useMemo(
     () => ({
       type: "FeatureCollection" as const,
@@ -191,15 +215,38 @@ export function OutlookMap({ mapView, features, legend: _legend }: OutlookMapPro
         properties: {
           title: f.title,
           categoryId: f.categoryId,
+          featureKey: f.id,
+          order: f.order,
           style: f.style,
-        },
+        } satisfies FeatureProps,
       })),
     }),
     [features],
   );
 
+  const resolveFeature = (feature?: GeoJSON.Feature): DisplayFeature | null => {
+    const props = propsOf(feature);
+    if (props) {
+      const fromKey = byKey.get(props.featureKey);
+      if (fromKey) return fromKey;
+      // Properties carry the authoritative style/label even if id matching fails
+      return {
+        id: props.featureKey,
+        geometry: feature?.geometry as DisplayFeature["geometry"],
+        title: props.title,
+        categoryId: props.categoryId,
+        order: props.order,
+        style: props.style,
+      };
+    }
+    if (feature?.id != null) {
+      return byKey.get(String(feature.id)) ?? null;
+    }
+    return null;
+  };
+
   const styleFn = (feature?: GeoJSON.Feature) => {
-    const match = features.find((f) => f.id === feature?.id);
+    const match = resolveFeature(feature);
     if (!match) {
       return { color: "#111111", weight: 1, fillOpacity: 0.4 };
     }
@@ -207,12 +254,12 @@ export function OutlookMap({ mapView, features, legend: _legend }: OutlookMapPro
   };
 
   const onEachFeature = (feature: GeoJSON.Feature, layer: L.Layer) => {
-    const title = String(feature.properties?.title ?? "");
+    const match = resolveFeature(feature);
+    const title = match?.title || String(feature.properties?.title ?? "");
     if (title) {
       layer.bindTooltip(title, { sticky: true });
     }
 
-    const match = features.find((f) => f.id === feature.id);
     if (!match || !(layer instanceof L.Path)) return;
 
     const kind = hatchKind(match.style, match.title);
@@ -242,7 +289,6 @@ export function OutlookMap({ mapView, features, legend: _legend }: OutlookMapPro
       setTimeout(paint, 50);
     });
 
-    // If already on map
     paint();
     requestAnimationFrame(paint);
   };
@@ -263,7 +309,7 @@ export function OutlookMap({ mapView, features, legend: _legend }: OutlookMapPro
       />
       <FitFeatures features={features} mapView={mapView} />
       <GeoJSON
-        key={features.map((f) => `${f.id}:${f.style.hatch}`).join(",") || "empty"}
+        key={features.map((f) => `${f.id}:${f.categoryId}:${f.title}`).join(",") || "empty"}
         data={geojson as GeoJSON.FeatureCollection}
         style={styleFn}
         onEachFeature={onEachFeature}

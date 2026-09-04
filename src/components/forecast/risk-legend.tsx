@@ -9,8 +9,9 @@ type Props = {
 function hatchKind(item: DisplayLegendItem): "none" | "l1" | "l2" {
   const hatch = (item.style.hatch ?? "none").toLowerCase();
   const title = item.label.toLowerCase();
-  if (title.includes("l2") || hatch === "crosshatch") return "l2";
-  if (title.includes("l1") || hatch === "diagonal") return "l1";
+  // Whole-token match only — "Low T-Storm" must never count as L1.
+  if (/\bl2\b/.test(title) || hatch === "crosshatch") return "l2";
+  if (/\bl1\b/.test(title) || hatch === "diagonal") return "l1";
   if (hatch !== "none") return "l1";
   return "none";
 }

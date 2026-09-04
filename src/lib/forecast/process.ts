@@ -189,17 +189,28 @@ function featuresFromCustomLayer(layer: CustomLayer): {
     const categoryId = String(feature.properties?.categoryId ?? "");
     const category = byId.get(categoryId);
     if (!category) continue;
+    // Always use the category legend label — never a stale feature title that
+    // can disagree with categoryId (e.g. T-Storm geometry titled Low T-Storm).
     features.push({
       id: String(feature.id ?? `${categoryId}-${features.length}`),
       geometry,
-      title: String(feature.properties?.title ?? category.label),
+      title: category.label,
       categoryId,
+      order: category.order,
       style: category.style,
     });
   }
 
-  return { features, legend };
+  // Ascending order so higher-risk categories paint above lower ones on the map.
+  features.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+
+  const used = new Set(features.map((f) => f.categoryId));
+  const usedLegend = legend.filter((item) => used.has(item.id));
+
+  return { features, legend: usedLegend.length ? usedLegend : legend };
 }
+
+const CATEGORICAL_ORDER = ["TSTM", "MRGL", "SLGT", "ENH", "MDT", "HIGH"] as const;
 
 function featuresFromCategorical(day: ForecastDay): {
   features: DisplayFeature[];
@@ -222,11 +233,16 @@ function featuresFromCategorical(day: ForecastDay): {
         hatch: "none",
       } satisfies CategoryStyle);
 
+    const order = CATEGORICAL_ORDER.indexOf(
+      label as (typeof CATEGORICAL_ORDER)[number],
+    );
+    const resolvedOrder = order >= 0 ? order : legendMap.size + 100;
+
     if (!legendMap.has(label)) {
       legendMap.set(label, {
         id: label,
         label,
-        order: legendMap.size,
+        order: resolvedOrder,
         style,
       });
     }
@@ -239,12 +255,18 @@ function featuresFromCategorical(day: ForecastDay): {
         geometry,
         title: label,
         categoryId: label,
+        order: resolvedOrder,
         style,
       });
     }
   }
 
-  return { features, legend: [...legendMap.values()] };
+  features.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+
+  return {
+    features,
+    legend: [...legendMap.values()].sort((a, b) => a.order - b.order),
+  };
 }
 
 function resolveValidDate(day: ForecastDay, forecast: GfcForecast): Date {

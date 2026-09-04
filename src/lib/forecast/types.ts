@@ -94,6 +94,8 @@ export type DisplayFeature = {
   geometry: GeoJsonGeometry;
   title: string;
   categoryId: string;
+  /** Legend/category order — lower draws first, higher risk paints on top. */
+  order: number;
   style: CategoryStyle;
 };
 

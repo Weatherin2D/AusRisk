@@ -18,7 +18,9 @@ export function PublicOutlook() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/forecast", { cache: "no-store" });
+        const res = await fetch(`/api/forecast?t=${Date.now()}`, {
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error("Could not load forecast");
         const json = (await res.json()) as PublicForecastResponse;
         if (cancelled) return;

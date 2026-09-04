@@ -3,18 +3,28 @@ import { isAdminAuthenticated } from "@/lib/auth";
 import { MAX_FORECAST_DAYS } from "@/lib/forecast/process";
 import {
   clearStoredForecast,
+  noStoreHeaders,
   readStoredForecast,
   removeForecastDays,
 } from "@/lib/forecast/storage";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   if (!(await isAdminAuthenticated())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: noStoreHeaders() },
+    );
   }
 
   const forecast = await readStoredForecast();
   if (!forecast) {
-    return NextResponse.json({ days: [], issuedAt: null });
+    return NextResponse.json(
+      { days: [], issuedAt: null },
+      { headers: noStoreHeaders() },
+    );
   }
 
   const days = Object.values(forecast.forecastCycle.days)
@@ -25,16 +35,22 @@ export async function GET() {
     }))
     .sort((a, b) => a.day - b.day);
 
-  return NextResponse.json({
-    days,
-    issuedAt: forecast.timestamp ?? null,
-    maxDays: MAX_FORECAST_DAYS,
-  });
+  return NextResponse.json(
+    {
+      days,
+      issuedAt: forecast.timestamp ?? null,
+      maxDays: MAX_FORECAST_DAYS,
+    },
+    { headers: noStoreHeaders() },
+  );
 }
 
 export async function DELETE(request: Request) {
   if (!(await isAdminAuthenticated())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: noStoreHeaders() },
+    );
   }
 
   try {
@@ -44,22 +60,29 @@ export async function DELETE(request: Request) {
 
     if (wipe) {
       await clearStoredForecast();
-      return NextResponse.json({ ok: true, wiped: true, days: [] });
+      return NextResponse.json(
+        { ok: true, wiped: true, days: [] },
+        { headers: noStoreHeaders() },
+      );
     }
 
     const body = await request.json().catch(() => ({}));
     if (Array.isArray(body.days)) {
-      dayNumbers = body.days.map((n: unknown) => Number(n)).filter(Number.isFinite);
+      dayNumbers = body.days
+        .map((n: unknown) => Number(n))
+        .filter(Number.isFinite);
     } else if (body.day != null) {
       dayNumbers = [Number(body.day)].filter(Number.isFinite);
     } else if (url.searchParams.has("day")) {
-      dayNumbers = [Number(url.searchParams.get("day"))].filter(Number.isFinite);
+      dayNumbers = [Number(url.searchParams.get("day"))].filter(
+        Number.isFinite,
+      );
     }
 
     if (!dayNumbers.length) {
       return NextResponse.json(
         { error: "Specify day, days[], or wipe=all" },
-        { status: 400 },
+        { status: 400, headers: noStoreHeaders() },
       );
     }
 
@@ -70,16 +93,22 @@ export async function DELETE(request: Request) {
           .sort((a, b) => a - b)
       : [];
 
-    return NextResponse.json({
-      ok: true,
-      removed: dayNumbers,
-      days: remaining,
-      wiped: remaining.length === 0,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        removed: dayNumbers,
+        days: remaining,
+        wiped: remaining.length === 0,
+      },
+      { headers: noStoreHeaders() },
+    );
   } catch (error) {
     console.error(error);
     const message =
       error instanceof Error ? error.message : "Failed to remove days";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message },
+      { status: 500, headers: noStoreHeaders() },
+    );
   }
 }

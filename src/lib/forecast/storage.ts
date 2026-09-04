@@ -9,6 +9,7 @@ const FORECAST_PATH = path.join(DATA_DIR, "current-forecast.json");
 const TMP_FORECAST_PATH = "/tmp/ausrisk-current-forecast.json";
 const TMP_TOMBSTONE_PATH = "/tmp/ausrisk-forecast-cleared";
 const BLOB_PATHNAME = "ausrisk/current-forecast.json";
+const BLOB_PREFIX = "ausrisk/";
 
 type BlobAccess = "public" | "private";
 
@@ -26,11 +27,16 @@ export function useBlobStorage() {
 }
 
 function preferredAccessOrder(): BlobAccess[] {
-  // Respect explicit override; otherwise try public then private.
   const forced = process.env.BLOB_ACCESS?.toLowerCase();
   if (forced === "private") return ["private"];
   if (forced === "public") return ["public"];
   return ["public", "private"];
+}
+
+function noStoreHeaders(): HeadersInit {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+  };
 }
 
 async function readJsonFile(filePath: string): Promise<GfcForecast | null> {
@@ -85,6 +91,31 @@ async function streamToForecast(
   return parsed;
 }
 
+/** Delete every object under ausrisk/ so stale test forecasts cannot come back. */
+async function clearBlob(): Promise<void> {
+  let cursor: string | undefined;
+  const urls: string[] = [];
+
+  do {
+    const page = await list({
+      prefix: BLOB_PREFIX,
+      cursor,
+      limit: 100,
+    });
+    for (const blob of page.blobs) {
+      urls.push(blob.url);
+    }
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+
+  if (urls.length) {
+    // del accepts up to many URLs; chunk to be safe
+    for (let i = 0; i < urls.length; i += 50) {
+      await del(urls.slice(i, i + 50));
+    }
+  }
+}
+
 async function readFromBlob(): Promise<GfcForecast | null> {
   const errors: string[] = [];
 
@@ -104,15 +135,15 @@ async function readFromBlob(): Promise<GfcForecast | null> {
     }
   }
 
-  // Fallback: list then fetch (older behavior)
+  // Exact pathname only — never pick random-suffix leftovers
   try {
-    const { blobs } = await list({ prefix: "ausrisk/", limit: 20 });
-    const match =
-      blobs.find((b) => b.pathname === BLOB_PATHNAME) ||
-      blobs.find((b) => b.pathname.includes("current-forecast")) ||
-      null;
+    const { blobs } = await list({ prefix: BLOB_PATHNAME, limit: 10 });
+    const match = blobs.find((b) => b.pathname === BLOB_PATHNAME) ?? null;
     if (match) {
-      const res = await fetch(match.url, { cache: "no-store" });
+      const res = await fetch(match.url, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       if (res.ok) {
         const parsed = (await res.json()) as unknown;
         if (isGfcForecast(parsed)) return parsed;
@@ -129,6 +160,13 @@ async function readFromBlob(): Promise<GfcForecast | null> {
 }
 
 async function writeToBlob(forecast: GfcForecast): Promise<void> {
+  // Remove prior versions first so an old test outlook cannot be served again
+  try {
+    await clearBlob();
+  } catch (error) {
+    console.error("Blob pre-clear failed (continuing to overwrite)", error);
+  }
+
   const body = JSON.stringify(forecast);
   const errors: string[] = [];
 
@@ -139,6 +177,7 @@ async function writeToBlob(forecast: GfcForecast): Promise<void> {
         contentType: "application/json",
         addRandomSuffix: false,
         allowOverwrite: true,
+        cacheControlMaxAge: 60,
       });
       return;
     } catch (error) {
@@ -151,12 +190,6 @@ async function writeToBlob(forecast: GfcForecast): Promise<void> {
   throw new Error(
     `Blob write failed. ${errors.join(" | ")}. Check Blob store access mode and tokens.`,
   );
-}
-
-async function clearBlob(): Promise<void> {
-  const { blobs } = await list({ prefix: "ausrisk/", limit: 50 });
-  const urls = blobs.map((b) => b.url);
-  if (urls.length) await del(urls);
 }
 
 async function readFromDisk(): Promise<GfcForecast | null> {
@@ -206,7 +239,6 @@ export async function readStoredForecast(): Promise<GfcForecast | null> {
 export async function writeStoredForecast(forecast: GfcForecast): Promise<void> {
   if (useBlobStorage()) {
     await writeToBlob(forecast);
-    // Mirror for same-instance reads right after upload
     if (process.env.VERCEL) {
       try {
         await writeRuntimeDisk(forecast);
@@ -215,11 +247,16 @@ export async function writeStoredForecast(forecast: GfcForecast): Promise<void> 
       }
     }
 
-    // Verify the blob is readable so admin gets a real error if storage is broken
+    // Confirm the blob is the NEW forecast, not a stale leftover
     const verify = await readFromBlob();
     if (!verify) {
       throw new Error(
-        "Forecast was written but could not be read back from Blob. Check that the Blob store access mode matches (public/private) and redeploy.",
+        "Forecast was written but could not be read back from Blob. Check Blob store access mode and redeploy.",
+      );
+    }
+    if (verify.timestamp !== forecast.timestamp) {
+      throw new Error(
+        "Forecast update did not stick — Blob still returned an older outlook. Try wipe-all, then publish again.",
       );
     }
     return;
@@ -287,3 +324,5 @@ export async function removeForecastDays(
   await writeStoredForecast(next);
   return next;
 }
+
+export { noStoreHeaders };

@@ -9,24 +9,29 @@ const FORECAST_PATH = path.join(DATA_DIR, "current-forecast.json");
 const TMP_FORECAST_PATH = "/tmp/ausrisk-current-forecast.json";
 const TMP_TOMBSTONE_PATH = "/tmp/ausrisk-forecast-cleared";
 
-/** Legacy single mutable object (CDN-cached overwrites caused stale “test” outlooks). */
+/** Legacy single mutable object — kept only for one-time migration reads. */
 const LEGACY_BLOB_PATHNAME = "ausrisk/current-forecast.json";
-/** Small pointer blob — always rewritten on publish/wipe. */
-const LATEST_POINTER_PATH = "ausrisk/latest.json";
+const LEGACY_LATEST_PATH = "ausrisk/latest.json";
+const META_PREFIX = "ausrisk/meta/";
 const FORECAST_OBJECT_PREFIX = "ausrisk/forecasts/";
 const BLOB_PREFIX = "ausrisk/";
 
 type BlobAccess = "public" | "private";
 
-type LatestPointer =
-  | { cleared: true; updatedAt: string }
+type MetaRecord =
+  | { kind: "cleared"; updatedAt: string }
   | {
-      cleared?: false;
+      kind: "active";
       pathname: string;
       url: string;
       timestamp: string;
       updatedAt: string;
     };
+
+type BlobRead =
+  | { kind: "cleared" }
+  | { kind: "forecast"; forecast: GfcForecast }
+  | { kind: "absent" };
 
 export function getForecastPath() {
   return FORECAST_PATH;
@@ -56,6 +61,12 @@ function noStoreHeaders(): HeadersInit {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function versionId(seed?: string): string {
+  const base = (seed ?? new Date().toISOString()).replace(/[:.]/g, "-");
+  const nonce = Math.random().toString(36).slice(2, 10);
+  return `${base}-${nonce}`;
 }
 
 async function readJsonFile(filePath: string): Promise<GfcForecast | null> {
@@ -111,7 +122,6 @@ async function streamToJson(
 async function putJson(
   pathname: string,
   value: unknown,
-  opts?: { addRandomSuffix?: boolean },
 ): Promise<PutBlobResult> {
   const body = JSON.stringify(value);
   const errors: string[] = [];
@@ -121,9 +131,8 @@ async function putJson(
       return await put(pathname, body, {
         access,
         contentType: "application/json",
-        addRandomSuffix: opts?.addRandomSuffix ?? false,
-        allowOverwrite: true,
-        // Mutable pointer must not sit in CDN for minutes
+        addRandomSuffix: false,
+        allowOverwrite: false,
         cacheControlMaxAge: 0,
       });
     } catch (error) {
@@ -139,8 +148,6 @@ async function putJson(
 }
 
 async function getJsonByPathname(pathname: string): Promise<unknown | null> {
-  const errors: string[] = [];
-
   for (const access of preferredAccessOrder()) {
     try {
       const result = await get(pathname, {
@@ -149,23 +156,17 @@ async function getJsonByPathname(pathname: string): Promise<unknown | null> {
       });
       if (!result || result.statusCode === 304) continue;
       return await streamToJson(result.stream);
-    } catch (error) {
-      errors.push(
-        `get(${access}): ${error instanceof Error ? error.message : String(error)}`,
-      );
+    } catch {
+      // try next access mode
     }
-  }
-
-  if (errors.length) {
-    console.error("Blob get failed:", errors.join(" | "));
   }
   return null;
 }
 
-/** Fetch a blob URL returned by put(), busting any CDN edge cache. */
+/** Fetch an immutable put() URL, busting any edge cache. */
 async function fetchJsonFromUrl(
   url: string,
-  attempts = 4,
+  attempts = 5,
 ): Promise<unknown | null> {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
@@ -179,45 +180,69 @@ async function fetchJsonFromUrl(
         },
       });
       if (res.status === 404) return null;
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return (await res.json()) as unknown;
     } catch (error) {
       lastError = error;
-      await sleep(150 * (i + 1));
+      await sleep(120 * (i + 1));
     }
   }
   console.error("fetchJsonFromUrl failed", lastError);
   return null;
 }
 
-function isClearedPointer(
-  value: unknown,
-): value is Extract<LatestPointer, { cleared: true }> {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      (value as { cleared?: unknown }).cleared === true,
-  );
-}
-
-function isActivePointer(
-  value: unknown,
-): value is Extract<LatestPointer, { pathname: string }> {
-  if (!value || typeof value !== "object") return false;
+function parseMeta(value: unknown): MetaRecord | null {
+  if (!value || typeof value !== "object") return null;
   const obj = value as Record<string, unknown>;
-  return (
+  if (obj.kind === "cleared" && typeof obj.updatedAt === "string") {
+    return { kind: "cleared", updatedAt: obj.updatedAt };
+  }
+  if (
+    obj.kind === "active" &&
+    typeof obj.pathname === "string" &&
+    typeof obj.url === "string" &&
+    typeof obj.timestamp === "string" &&
+    typeof obj.updatedAt === "string"
+  ) {
+    return {
+      kind: "active",
+      pathname: obj.pathname,
+      url: obj.url,
+      timestamp: obj.timestamp,
+      updatedAt: obj.updatedAt,
+    };
+  }
+  // Legacy pointer shapes from the previous fix attempt
+  if (obj.cleared === true && typeof obj.updatedAt === "string") {
+    return { kind: "cleared", updatedAt: obj.updatedAt };
+  }
+  if (
     obj.cleared !== true &&
     typeof obj.pathname === "string" &&
     typeof obj.url === "string" &&
     typeof obj.timestamp === "string"
-  );
+  ) {
+    return {
+      kind: "active",
+      pathname: obj.pathname,
+      url: obj.url,
+      timestamp: obj.timestamp,
+      updatedAt:
+        typeof obj.updatedAt === "string"
+          ? obj.updatedAt
+          : new Date(0).toISOString(),
+    };
+  }
+  return null;
 }
 
-async function listAllUrls(prefix: string): Promise<string[]> {
+async function listBlobs(prefix: string) {
   let cursor: string | undefined;
-  const urls: string[] = [];
+  const blobs: {
+    url: string;
+    pathname: string;
+    uploadedAt: Date;
+  }[] = [];
 
   do {
     const page = await list({
@@ -226,12 +251,16 @@ async function listAllUrls(prefix: string): Promise<string[]> {
       limit: 100,
     });
     for (const blob of page.blobs) {
-      urls.push(blob.url);
+      blobs.push({
+        url: blob.url,
+        pathname: blob.pathname,
+        uploadedAt: blob.uploadedAt,
+      });
     }
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
 
-  return urls;
+  return blobs;
 }
 
 async function deleteUrls(urls: string[]): Promise<void> {
@@ -241,14 +270,36 @@ async function deleteUrls(urls: string[]): Promise<void> {
   }
 }
 
-/** Best-effort wipe of every object under ausrisk/. */
-async function clearAllBlobsBestEffort(): Promise<void> {
+async function deleteAllUnder(prefix: string): Promise<void> {
   try {
-    const urls = await listAllUrls(BLOB_PREFIX);
-    await deleteUrls(urls);
+    const blobs = await listBlobs(prefix);
+    await deleteUrls(blobs.map((b) => b.url));
   } catch (error) {
-    console.error("Blob list/delete failed (continuing)", error);
+    console.error(`Blob delete under ${prefix} failed (continuing)`, error);
   }
+}
+
+/**
+ * Authoritative meta is the newest object under ausrisk/meta/.
+ * Each publish/wipe writes a NEW pathname so CDN cannot serve a stale overwrite.
+ */
+async function readNewestMeta(): Promise<MetaRecord | null> {
+  try {
+    const metas = await listBlobs(META_PREFIX);
+    if (!metas.length) return null;
+    metas.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+
+    for (const blob of metas) {
+      const json =
+        (await fetchJsonFromUrl(blob.url)) ??
+        (await getJsonByPathname(blob.pathname));
+      const meta = parseMeta(json);
+      if (meta) return meta;
+    }
+  } catch (error) {
+    console.error("readNewestMeta failed", error);
+  }
+  return null;
 }
 
 async function readLegacyForecast(): Promise<GfcForecast | null> {
@@ -256,7 +307,7 @@ async function readLegacyForecast(): Promise<GfcForecast | null> {
   if (isGfcForecast(parsed)) return parsed;
 
   try {
-    const { blobs } = await list({ prefix: LEGACY_BLOB_PATHNAME, limit: 10 });
+    const blobs = await listBlobs(LEGACY_BLOB_PATHNAME);
     const match = blobs.find((b) => b.pathname === LEGACY_BLOB_PATHNAME);
     if (!match) return null;
     const fromUrl = await fetchJsonFromUrl(match.url);
@@ -266,90 +317,70 @@ async function readLegacyForecast(): Promise<GfcForecast | null> {
   }
 }
 
-async function readPointer(): Promise<LatestPointer | null> {
-  const fromGet = await getJsonByPathname(LATEST_POINTER_PATH);
-  if (isClearedPointer(fromGet) || isActivePointer(fromGet)) {
-    return fromGet;
-  }
-
+async function readLegacyLatestPointer(): Promise<MetaRecord | null> {
+  const parsed = parseMeta(await getJsonByPathname(LEGACY_LATEST_PATH));
+  if (parsed) return parsed;
   try {
-    const { blobs } = await list({ prefix: LATEST_POINTER_PATH, limit: 5 });
-    const match = blobs.find((b) => b.pathname === LATEST_POINTER_PATH);
+    const blobs = await listBlobs(LEGACY_LATEST_PATH);
+    const match = blobs.find((b) => b.pathname === LEGACY_LATEST_PATH);
     if (!match) return null;
-    const fromUrl = await fetchJsonFromUrl(match.url);
-    if (isClearedPointer(fromUrl) || isActivePointer(fromUrl)) {
-      return fromUrl;
-    }
-  } catch (error) {
-    console.error("Pointer list/fetch failed", error);
+    return parseMeta(await fetchJsonFromUrl(match.url));
+  } catch {
+    return null;
   }
-  return null;
 }
 
-type BlobRead =
-  | { kind: "cleared" }
-  | { kind: "forecast"; forecast: GfcForecast }
-  | { kind: "absent" };
-
 async function readFromBlob(): Promise<BlobRead> {
-  const pointer = await readPointer();
+  const meta = (await readNewestMeta()) ?? (await readLegacyLatestPointer());
 
-  if (isClearedPointer(pointer)) {
+  if (meta?.kind === "cleared") {
     return { kind: "cleared" };
   }
 
-  if (isActivePointer(pointer)) {
-    // Prefer the exact URL from the last successful put (cache-busted)
-    const fromUrl = await fetchJsonFromUrl(pointer.url);
-    if (isGfcForecast(fromUrl) && fromUrl.timestamp === pointer.timestamp) {
+  if (meta?.kind === "active") {
+    const fromUrl = await fetchJsonFromUrl(meta.url);
+    if (isGfcForecast(fromUrl)) {
       return { kind: "forecast", forecast: fromUrl };
     }
-
-    const fromPath = await getJsonByPathname(pointer.pathname);
+    const fromPath = await getJsonByPathname(meta.pathname);
     if (isGfcForecast(fromPath)) {
       return { kind: "forecast", forecast: fromPath };
     }
-
-    // Pointer exists but object missing — empty, do not revive legacy/tmp.
+    // Active meta but object gone — treat as empty, never revive legacy test data.
     return { kind: "cleared" };
   }
 
-  // Migration: no pointer yet → try legacy mutable pathname once
   const legacy = await readLegacyForecast();
   if (legacy) return { kind: "forecast", forecast: legacy };
   return { kind: "absent" };
 }
 
-function versionedForecastPath(timestamp: string): string {
-  const safe = timestamp.replace(/[:.]/g, "-");
-  const nonce = Math.random().toString(36).slice(2, 8);
-  return `${FORECAST_OBJECT_PREFIX}${safe}-${nonce}.json`;
+async function writeMeta(meta: MetaRecord): Promise<PutBlobResult> {
+  const pathname = `${META_PREFIX}${versionId(meta.updatedAt)}.json`;
+  return putJson(pathname, meta);
 }
 
 async function writeToBlob(forecast: GfcForecast): Promise<void> {
-  const pathname = versionedForecastPath(forecast.timestamp);
-  const object = await putJson(pathname, forecast);
+  const forecastPath = `${FORECAST_OBJECT_PREFIX}${versionId(forecast.timestamp)}.json`;
+  const object = await putJson(forecastPath, forecast);
 
-  const pointer: LatestPointer = {
-    cleared: false,
+  const updatedAt = new Date().toISOString();
+  const meta: MetaRecord = {
+    kind: "active",
     pathname: object.pathname,
     url: object.url,
     timestamp: forecast.timestamp,
-    updatedAt: new Date().toISOString(),
+    updatedAt,
   };
+  const metaPut = await writeMeta(meta);
 
-  const pointerPut = await putJson(LATEST_POINTER_PATH, pointer);
-
-  // Verify via the put URL itself (not a CDN-cached mutable pathname)
-  let verified: unknown | null = await fetchJsonFromUrl(object.url);
+  // Verify via immutable put URLs
+  let verified = await fetchJsonFromUrl(object.url);
   if (!isGfcForecast(verified) || verified.timestamp !== forecast.timestamp) {
-    // Brief retry — origin can lag a moment after put
-    await sleep(250);
+    await sleep(200);
     verified = await fetchJsonFromUrl(object.url);
   }
-
   if (!isGfcForecast(verified) || verified.timestamp !== forecast.timestamp) {
-    // Last resort: pathname get with useCache:false
     const viaGet = await getJsonByPathname(object.pathname);
     if (!isGfcForecast(viaGet) || viaGet.timestamp !== forecast.timestamp) {
       throw new Error(
@@ -358,30 +389,21 @@ async function writeToBlob(forecast: GfcForecast): Promise<void> {
     }
   }
 
-  // Confirm pointer points at this version
-  const pointerCheck =
-    (await fetchJsonFromUrl(pointerPut.url)) ??
-    (await getJsonByPathname(LATEST_POINTER_PATH));
-  if (
-    !isActivePointer(pointerCheck) ||
-    pointerCheck.timestamp !== forecast.timestamp
-  ) {
-    // Re-put pointer once more
-    await putJson(LATEST_POINTER_PATH, pointer);
+  const metaCheck =
+    (await fetchJsonFromUrl(metaPut.url)) ??
+    (await getJsonByPathname(metaPut.pathname));
+  if (parseMeta(metaCheck)?.kind !== "active") {
+    await writeMeta(meta);
   }
 
-  // Best-effort: remove legacy mutable file + older versioned objects so the
-  // old test outlook cannot be served by any fallback path.
+  // Remove older metas/forecasts/legacy so nothing can resurrect the test file.
+  // Keep only the just-written pair.
   try {
-    const urls = await listAllUrls(BLOB_PREFIX);
-    const keep = new Set([object.url, pointerPut.url]);
-    // pointerPut.url may differ after rewrite — also keep by pathname match
-    const stale = urls.filter((url) => {
-      if (keep.has(url)) return false;
-      if (url.includes(object.pathname)) return false;
-      if (url.includes(LATEST_POINTER_PATH)) return false;
-      return true;
-    });
+    const all = await listBlobs(BLOB_PREFIX);
+    const keepPathnames = new Set([object.pathname, metaPut.pathname]);
+    const stale = all
+      .filter((b) => !keepPathnames.has(b.pathname))
+      .map((b) => b.url);
     await deleteUrls(stale);
   } catch (error) {
     console.error("Blob cleanup failed (non-fatal)", error);
@@ -389,18 +411,27 @@ async function writeToBlob(forecast: GfcForecast): Promise<void> {
 }
 
 async function clearBlob(): Promise<void> {
-  const clearedAt = new Date().toISOString();
-  const tombstone: LatestPointer = {
-    cleared: true,
-    updatedAt: clearedAt,
-  };
+  const updatedAt = new Date().toISOString();
+  const metaPut = await writeMeta({ kind: "cleared", updatedAt });
 
-  // Write the cleared pointer FIRST so readers stop serving old JSON even if
-  // deletes are slow or CDN still has previous forecast objects.
-  await putJson(LATEST_POINTER_PATH, tombstone);
-  await clearAllBlobsBestEffort();
-  // Re-assert tombstone after wipe (delete may have removed the pointer)
-  await putJson(LATEST_POINTER_PATH, tombstone);
+  // Delete everything else under ausrisk/, then keep/reassert this cleared meta.
+  try {
+    const all = await listBlobs(BLOB_PREFIX);
+    const stale = all
+      .filter((b) => b.url !== metaPut.url && b.pathname !== metaPut.pathname)
+      .map((b) => b.url);
+    await deleteUrls(stale);
+  } catch (error) {
+    console.error("Blob clear delete failed (continuing)", error);
+    await deleteAllUnder(FORECAST_OBJECT_PREFIX);
+    await deleteAllUnder(LEGACY_BLOB_PATHNAME);
+  }
+
+  // If the cleared meta was swept somehow, write another unique cleared record.
+  const newest = await readNewestMeta();
+  if (newest?.kind !== "cleared") {
+    await writeMeta({ kind: "cleared", updatedAt: new Date().toISOString() });
+  }
 }
 
 async function readFromDisk(): Promise<GfcForecast | null> {
@@ -438,7 +469,6 @@ export async function readStoredForecast(): Promise<GfcForecast | null> {
     if (fromBlob.kind === "cleared") return null;
     if (fromBlob.kind === "forecast") return fromBlob.forecast;
 
-    // No pointer and no legacy blob — same-instance /tmp only (never after wipe)
     if (process.env.VERCEL) {
       return readRuntimeDisk();
     }

@@ -1,16 +1,22 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { del, list, put } from "@vercel/blob";
 import type { GfcForecast } from "./types";
 import { isGfcForecast } from "./process";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const FORECAST_PATH = path.join(DATA_DIR, "current-forecast.json");
+const BLOB_PATHNAME = "ausrisk/current-forecast.json";
 
 export function getForecastPath() {
   return FORECAST_PATH;
 }
 
-export async function readStoredForecast(): Promise<GfcForecast | null> {
+function useBlobStorage() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+async function readFromDisk(): Promise<GfcForecast | null> {
   try {
     const raw = await fs.readFile(FORECAST_PATH, "utf8");
     const parsed = JSON.parse(raw) as unknown;
@@ -23,12 +29,12 @@ export async function readStoredForecast(): Promise<GfcForecast | null> {
   }
 }
 
-export async function writeStoredForecast(forecast: GfcForecast): Promise<void> {
+async function writeToDisk(forecast: GfcForecast): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(FORECAST_PATH, JSON.stringify(forecast, null, 2), "utf8");
 }
 
-export async function clearStoredForecast(): Promise<void> {
+async function clearDisk(): Promise<void> {
   try {
     await fs.unlink(FORECAST_PATH);
   } catch (error) {
@@ -37,7 +43,64 @@ export async function clearStoredForecast(): Promise<void> {
   }
 }
 
-export async function removeForecastDays(dayNumbers: number[]): Promise<GfcForecast | null> {
+async function readFromBlob(): Promise<GfcForecast | null> {
+  const { blobs } = await list({ prefix: BLOB_PATHNAME, limit: 10 });
+  const match =
+    blobs.find((b) => b.pathname === BLOB_PATHNAME) ?? blobs[0] ?? null;
+  if (!match) return null;
+
+  const res = await fetch(match.url, { cache: "no-store" });
+  if (!res.ok) return null;
+  const parsed = (await res.json()) as unknown;
+  if (!isGfcForecast(parsed)) return null;
+  return parsed;
+}
+
+async function writeToBlob(forecast: GfcForecast): Promise<void> {
+  await put(BLOB_PATHNAME, JSON.stringify(forecast), {
+    access: "public",
+    contentType: "application/json",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+  });
+}
+
+async function clearBlob(): Promise<void> {
+  const { blobs } = await list({ prefix: "ausrisk/", limit: 20 });
+  const urls = blobs.map((b) => b.url);
+  if (urls.length) await del(urls);
+}
+
+export async function readStoredForecast(): Promise<GfcForecast | null> {
+  if (useBlobStorage()) {
+    try {
+      return await readFromBlob();
+    } catch (error) {
+      console.error("Blob read failed, falling back to disk", error);
+    }
+  }
+  return readFromDisk();
+}
+
+export async function writeStoredForecast(forecast: GfcForecast): Promise<void> {
+  if (useBlobStorage()) {
+    await writeToBlob(forecast);
+    return;
+  }
+  await writeToDisk(forecast);
+}
+
+export async function clearStoredForecast(): Promise<void> {
+  if (useBlobStorage()) {
+    await clearBlob();
+    return;
+  }
+  await clearDisk();
+}
+
+export async function removeForecastDays(
+  dayNumbers: number[],
+): Promise<GfcForecast | null> {
   const forecast = await readStoredForecast();
   if (!forecast) return null;
 

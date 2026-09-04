@@ -8,6 +8,7 @@ Public website for Australian severe convective outlooks. Upload a GFC `forecast
 - Day tabs that auto-roll in **Australia/Sydney** time (yesterday’s Day 2 becomes today’s Day 1)
 - Outlook range capped at **5 days**
 - Admin day picker: choose which day slot (1–5) an upload lands on, with optional merge
+- Remove individual days or wipe the whole outlook
 - Legend built from the AusRisk custom layer in your JSON
 - Password-protected admin upload (`/admin`)
 
@@ -21,11 +22,7 @@ npm run dev
 
 Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
 
-Default admin password is set in `.env.local` as `ADMIN_PASSWORD` (use a long random secret). The example file only has a placeholder:
-
-```
-ADMIN_PASSWORD=change-me-to-a-long-random-secret
-```
+Set a long random `ADMIN_PASSWORD` in `.env.local`.
 
 1. Go to `/admin` and sign in
 2. Manage published days (remove one day or wipe all), or upload a new file
@@ -34,10 +31,25 @@ ADMIN_PASSWORD=change-me-to-a-long-random-secret
 
 An example file lives at `public/samples/example-forecast.json`.
 
+## Deploy on Vercel
+
+```bash
+npx vercel login
+npx vercel --prod
+```
+
+In the Vercel project settings, add environment variables:
+
+- `ADMIN_PASSWORD` — your long admin password
+- `ADMIN_SESSION_SECRET` — another long random string
+- `BLOB_READ_WRITE_TOKEN` — from a Vercel Blob store (keeps uploads durable across deploys)
+
+Without Blob storage, local disk works for development only; serverless hosts need Blob (or similar) so forecasts persist.
+
 ## Day rolling
 
 On upload, each stored day number is stamped to a Sydney calendar date (`today + day - 1`). On every public load, days with a past `validDate` drop off and remaining days are re-labelled (Day 2 → Day 1, and so on). Only Days 1–5 are kept.
 
 ## Stack
 
-Next.js, TypeScript, Tailwind, shadcn/ui, Leaflet.
+Next.js, TypeScript, Tailwind, shadcn/ui, Leaflet, Vercel Blob (optional for production).

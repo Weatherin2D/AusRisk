@@ -21,15 +21,15 @@ npm run dev
 
 Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
 
-Default admin password (override in `.env.local`):
+Default admin password is set in `.env.local` as `ADMIN_PASSWORD` (use a long random secret). The example file only has a placeholder:
 
 ```
-ADMIN_PASSWORD=ausrisk-admin
+ADMIN_PASSWORD=change-me-to-a-long-random-secret
 ```
 
 1. Go to `/admin` and sign in
-2. Pick the day slot (Day 1–5) the upload should start on
-3. Upload a `gfc-forecast-*.json` file
+2. Manage published days (remove one day or wipe all), or upload a new file
+3. Pick the day slot (Day 1–5) the upload should start on
 4. The public homepage updates immediately
 
 An example file lives at `public/samples/example-forecast.json`.

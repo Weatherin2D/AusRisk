@@ -11,6 +11,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { MAX_FORECAST_DAYS } from "@/lib/forecast/process";
+
+const DAY_OPTIONS = Array.from({ length: MAX_FORECAST_DAYS }, (_, i) => i + 1);
 
 export function AdminPanel() {
   const [checking, setChecking] = useState(true);
@@ -21,6 +24,8 @@ export function AdminPanel() {
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [targetDay, setTargetDay] = useState(1);
+  const [replaceAll, setReplaceAll] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +74,8 @@ export function AdminPanel() {
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("targetDay", String(targetDay));
+      form.append("replaceAll", String(replaceAll));
       const res = await fetch("/api/admin/upload", {
         method: "POST",
         body: form,
@@ -76,14 +83,17 @@ export function AdminPanel() {
       const json = (await res.json()) as {
         ok?: boolean;
         dayCount?: number;
+        targetStartDay?: number;
+        days?: number[];
         error?: string;
       };
       if (!res.ok) {
         setUploadError(json.error ?? "Upload failed");
         return;
       }
+      const dayList = (json.days ?? []).join(", ");
       setUploadMessage(
-        `Uploaded successfully. ${json.dayCount ?? 0} day(s) published. Day numbers will roll automatically overnight.`,
+        `Uploaded as Day ${json.targetStartDay ?? targetDay}. Active days: ${dayList || json.dayCount}. Days roll overnight (max ${MAX_FORECAST_DAYS}).`,
       );
     } catch {
       setUploadError("Upload failed.");
@@ -153,9 +163,9 @@ export function AdminPanel() {
               <div>
                 <CardTitle>Upload forecast</CardTitle>
                 <CardDescription className="text-[#9db8c0]">
-                  Drop a <code>gfc-forecast-*.json</code> file. Valid dates are
-                  set from the day numbers relative to today (Sydney), so Day 2
-                  becomes Day 1 tomorrow.
+                  Choose which day slot (1–{MAX_FORECAST_DAYS}) this upload
+                  should land on. Extra days in the file fill the following
+                  slots. Maximum outlook range is {MAX_FORECAST_DAYS} days.
                 </CardDescription>
               </div>
               <Button variant="outline" onClick={onLogout}>
@@ -163,6 +173,40 @@ export function AdminPanel() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="targetDay">Publish starting as</Label>
+                <select
+                  id="targetDay"
+                  value={targetDay}
+                  onChange={(e) => setTargetDay(Number(e.target.value))}
+                  className="flex h-9 w-full rounded-md border border-[#1e3a44] bg-[#07141a] px-3 text-sm text-[#eef6f7] outline-none focus-visible:ring-2 focus-visible:ring-[#3ec4c0]"
+                >
+                  {DAY_OPTIONS.map((day) => (
+                    <option key={day} value={day}>
+                      Day {day}
+                      {day === 1 ? " (Today)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-[#6f8b93]">
+                  Example: pick Day 2 to place the first outlook in the file as
+                  tomorrow. Later days in the file become Day 3, 4, …
+                </p>
+              </div>
+
+              <label className="flex items-start gap-3 text-sm text-[#c9e6e3]">
+                <input
+                  type="checkbox"
+                  checked={replaceAll}
+                  onChange={(e) => setReplaceAll(e.target.checked)}
+                  className="mt-1"
+                />
+                <span>
+                  Replace entire forecast cycle (otherwise merge into existing
+                  days)
+                </span>
+              </label>
+
               <label
                 onDragOver={(e) => {
                   e.preventDefault();

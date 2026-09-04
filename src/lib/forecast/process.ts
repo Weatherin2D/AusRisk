@@ -17,6 +17,7 @@ import type {
 const SYDNEY_TZ = "Australia/Sydney";
 const PLACEHOLDER_LABEL = "placeholder";
 const PLACEHOLDER_DATE_PREFIX = "2026-01-01";
+export const MAX_FORECAST_DAYS = 5;
 
 const CATEGORICAL_STYLES: Record<string, CategoryStyle> = {
   TSTM: {
@@ -260,47 +261,98 @@ function resolveValidDate(day: ForecastDay, forecast: GfcForecast): Date {
   return addCalendarDays(base, Math.max(0, day.day - 1));
 }
 
-/** Stamp each day's validDate relative to Sydney "today" using stored day numbers. */
+function cleanDayLayers(day: ForecastDay): ForecastDay["customLayers"] {
+  if (!day.customLayers) return undefined;
+  return {
+    ...day.customLayers,
+    layers: (day.customLayers.layers ?? []).map((layer) => ({
+      ...layer,
+      categories: stripPlaceholderCategories(layer.categories ?? []),
+    })),
+  };
+}
+
+function stampDayDates(
+  day: ForecastDay,
+  dayNumber: number,
+  today: Date,
+): ForecastDay {
+  return {
+    ...day,
+    day: dayNumber,
+    metadata: {
+      ...day.metadata,
+      validDate: formatIsoDate(addCalendarDays(today, dayNumber - 1)),
+      issueDate: formatIsoDate(today),
+      lastModified: new Date().toISOString(),
+    },
+    customLayers: cleanDayLayers(day),
+  };
+}
+
+function clampDay(n: number): number {
+  return Math.min(MAX_FORECAST_DAYS, Math.max(1, Math.round(n)));
+}
+
+/**
+ * Place uploaded days starting at `targetStartDay` (1–5), merge into any
+ * existing cycle, strip PLACEHOLDER legend entries, and stamp Sydney dates.
+ * Days beyond day 5 are dropped.
+ */
 export function normalizeForecastOnUpload(
   forecast: GfcForecast,
-  now = new Date(),
+  options: {
+    targetStartDay?: number;
+    existing?: GfcForecast | null;
+    now?: Date;
+  } = {},
 ): GfcForecast {
-  const today = todaySydney(now);
-  const days: Record<string, ForecastDay> = {};
+  const today = todaySydney(options.now ?? new Date());
+  const targetStartDay = clampDay(options.targetStartDay ?? 1);
 
-  for (const [key, day] of Object.entries(forecast.forecastCycle.days)) {
-    const storedDay = day.day ?? Number(key);
-    const valid = addCalendarDays(today, Math.max(0, storedDay - 1));
-    const layer = day.customLayers
-      ? {
-          ...day.customLayers,
-          layers: (day.customLayers.layers ?? []).map((layer) => ({
-            ...layer,
-            categories: stripPlaceholderCategories(layer.categories ?? []),
-          })),
-        }
-      : undefined;
+  const incoming = Object.values(forecast.forecastCycle.days)
+    .map((day, index) => ({
+      day,
+      original: day.day ?? Number.NaN,
+      index,
+    }))
+    .sort((a, b) => {
+      const aDay = Number.isFinite(a.original) ? a.original : a.index + 1;
+      const bDay = Number.isFinite(b.original) ? b.original : b.index + 1;
+      return aDay - bDay;
+    });
 
-    days[key] = {
-      ...day,
-      day: storedDay,
-      metadata: {
-        ...day.metadata,
-        validDate: formatIsoDate(valid),
-        issueDate: formatIsoDate(today),
-        lastModified: new Date().toISOString(),
-      },
-      customLayers: layer,
-    };
+  const mergedDays: Record<string, ForecastDay> = {};
+
+  if (options.existing?.forecastCycle?.days) {
+    for (const [key, day] of Object.entries(options.existing.forecastCycle.days)) {
+      const n = day.day ?? Number(key);
+      if (!Number.isFinite(n) || n < 1 || n > MAX_FORECAST_DAYS) continue;
+      mergedDays[String(n)] = stampDayDates(day, n, today);
+    }
   }
 
+  let assigned = 0;
+  for (const item of incoming) {
+    const newDay = targetStartDay + assigned;
+    assigned += 1;
+    if (newDay > MAX_FORECAST_DAYS) break;
+    mergedDays[String(newDay)] = stampDayDates(item.day, newDay, today);
+  }
+
+  const base = options.existing ?? forecast;
+
   return {
+    ...base,
     ...forecast,
     timestamp: new Date().toISOString(),
+    mapView: forecast.mapView ?? base.mapView,
     forecastCycle: {
+      ...base.forecastCycle,
       ...forecast.forecastCycle,
+      currentDay: 1,
       cycleDate: formatIsoDate(today).slice(0, 10),
-      days,
+      days: mergedDays,
     },
   };
 }
@@ -321,7 +373,7 @@ export function rollForecast(
     const storedDay = day.day ?? Number(key);
     const validDate = resolveValidDate(day, forecast);
     const effectiveDay = calendarDaysBetween(today, validDate) + 1;
-    if (effectiveDay < 1) continue;
+    if (effectiveDay < 1 || effectiveDay > MAX_FORECAST_DAYS) continue;
 
     const ausRisk = findAusRiskLayer(day);
     const built = ausRisk

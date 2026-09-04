@@ -1,11 +1,13 @@
 # AusRisk
 
-Public website for Australian severe convective outlooks. Upload a GFC `forecast-cycle` JSON from the admin page; the public homepage shows a zoomable map, day tabs, and the risk key (legend). `PLACEHOLDER` legend entries are removed automatically.
+Public website for Australian severe convective outlooks. Upload a GFC `forecast-cycle` JSON from the admin page; the public homepage shows a zoomable dark map, day tabs, and the risk key (legend). `PLACEHOLDER` legend entries are removed automatically.
 
 ## Features
 
-- Public outlook map with pan / scroll-wheel zoom
+- Public outlook map with pan / scroll-wheel zoom on a dark basemap
 - Day tabs that auto-roll in **Australia/Sydney** time (yesterday’s Day 2 becomes today’s Day 1)
+- Outlook range capped at **5 days**
+- Admin day picker: choose which day slot (1–5) an upload lands on, with optional merge
 - Legend built from the AusRisk custom layer in your JSON
 - Password-protected admin upload (`/admin`)
 
@@ -26,14 +28,15 @@ ADMIN_PASSWORD=ausrisk-admin
 ```
 
 1. Go to `/admin` and sign in
-2. Upload a `gfc-forecast-*.json` file
-3. The public homepage updates immediately
+2. Pick the day slot (Day 1–5) the upload should start on
+3. Upload a `gfc-forecast-*.json` file
+4. The public homepage updates immediately
 
 An example file lives at `public/samples/example-forecast.json`.
 
 ## Day rolling
 
-On upload, each stored day number is stamped to a Sydney calendar date (`today + day - 1`). On every public load, days with a past `validDate` drop off and remaining days are re-labelled (Day 2 → Day 1, and so on).
+On upload, each stored day number is stamped to a Sydney calendar date (`today + day - 1`). On every public load, days with a past `validDate` drop off and remaining days are re-labelled (Day 2 → Day 1, and so on). Only Days 1–5 are kept.
 
 ## Stack
 

@@ -201,9 +201,9 @@ export function OutlookMap({ mapView, features, legend }: OutlookMapProps) {
       attributionControl={false}
     >
       <TileLayer
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        maxZoom={19}
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+        attribution="Tiles &copy; Esri"
+        maxZoom={16}
       />
       <HatchPatterns legend={legend} />
       <FitFeatures features={features} mapView={mapView} />

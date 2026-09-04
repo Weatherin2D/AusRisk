@@ -201,7 +201,7 @@ export function OutlookMap({ mapView, features, legend }: OutlookMapProps) {
       attributionControl={false}
     >
       <TileLayer
-        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
         attribution="Tiles &copy; Esri"
         maxZoom={16}
       />

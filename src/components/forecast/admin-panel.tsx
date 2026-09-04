@@ -196,34 +196,34 @@ export function AdminPanel() {
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#07141a] text-[#9db8c0]">
+      <div className="flex min-h-screen items-center justify-center bg-[#050505] text-neutral-400">
         Checking session…
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#07141a] px-5 py-10 text-[#eef6f7] sm:px-8">
+    <div className="min-h-screen bg-[#050505] px-5 py-10 text-[#fafafa] sm:px-8">
       <div className="mx-auto max-w-xl">
         <a
           href="/"
-          className="text-xs uppercase tracking-[0.2em] text-[#6f8b93] hover:text-[#d7ebea]"
+          className="text-xs uppercase tracking-[0.22em] text-neutral-500 hover:text-white"
         >
           ← AusRisk
         </a>
-        <h1 className="mt-4 font-[family-name:var(--font-display)] text-4xl text-[#f4fbfc]">
+        <h1 className="mt-4 font-[family-name:var(--font-display)] text-4xl font-bold tracking-tight text-white">
           Admin
         </h1>
-        <p className="mt-2 text-sm text-[#9db8c0]">
-          Upload a GFC <code className="text-[#c9e6e3]">forecast-cycle</code>{" "}
+        <p className="mt-2 text-sm text-neutral-400">
+          Upload a GFC <code className="text-neutral-200">forecast-cycle</code>{" "}
           JSON. Only you can publish outlooks.
         </p>
 
         {!authenticated ? (
-          <Card className="mt-8 border-[#1e3a44] bg-[#0b1c24] text-[#eef6f7]">
+          <Card className="mt-8 border-neutral-800 bg-neutral-950 text-[#fafafa]">
             <CardHeader>
               <CardTitle>Sign in</CardTitle>
-              <CardDescription className="text-[#9db8c0]">
+              <CardDescription className="text-neutral-400">
                 Enter the admin password to upload or manage forecasts.
               </CardDescription>
             </CardHeader>
@@ -237,11 +237,11 @@ export function AdminPanel() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
-                    className="border-[#1e3a44] bg-[#07141a]"
+                    className="border-neutral-800 bg-black"
                   />
                 </div>
                 {loginError && (
-                  <p className="text-sm text-[#ffb4b4]">{loginError}</p>
+                  <p className="text-sm text-red-400">{loginError}</p>
                 )}
                 <Button type="submit" className="w-full">
                   Sign in
@@ -251,11 +251,11 @@ export function AdminPanel() {
           </Card>
         ) : (
           <div className="mt-8 space-y-6">
-            <Card className="border-[#1e3a44] bg-[#0b1c24] text-[#eef6f7]">
+            <Card className="border-neutral-800 bg-neutral-950 text-[#fafafa]">
               <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <div>
                   <CardTitle>Manage days</CardTitle>
-                  <CardDescription className="text-[#9db8c0]">
+                  <CardDescription className="text-neutral-400">
                     Remove a single day or wipe the whole public outlook.
                   </CardDescription>
                 </div>
@@ -265,7 +265,7 @@ export function AdminPanel() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {storedDays.length === 0 ? (
-                  <p className="text-sm text-[#9db8c0]">
+                  <p className="text-sm text-neutral-400">
                     No forecast days published.
                   </p>
                 ) : (
@@ -273,13 +273,15 @@ export function AdminPanel() {
                     {storedDays.map((day) => (
                       <li
                         key={day.day}
-                        className="flex items-center justify-between gap-3 border border-[#1e3a44] bg-[#07141a] px-3 py-2"
+                        className="flex items-center justify-between gap-3 border border-neutral-800 bg-black px-3 py-2"
                       >
                         <div>
                           <p className="text-sm font-semibold">Day {day.day}</p>
-                          <p className="text-xs text-[#6f8b93]">
+                          <p className="text-xs text-neutral-500">
                             {formatValidDate(day.validDate)}
-                            {day.hasCustomLayer ? " · AusRisk layer" : " · categorical"}
+                            {day.hasCustomLayer
+                              ? " · AusRisk layer"
+                              : " · categorical"}
                           </p>
                         </div>
                         <Button
@@ -287,7 +289,7 @@ export function AdminPanel() {
                           size="sm"
                           disabled={busyDay !== null}
                           onClick={() => void removeDay(day.day)}
-                          className="border-[#5a2b2b] text-[#ffb4b4] hover:bg-[#2a1515]"
+                          className="border-neutral-700 text-neutral-200 hover:bg-neutral-900"
                         >
                           {busyDay === day.day ? "Removing…" : "Remove"}
                         </Button>
@@ -299,23 +301,23 @@ export function AdminPanel() {
                   variant="outline"
                   disabled={busyDay !== null || storedDays.length === 0}
                   onClick={() => void wipeAll()}
-                  className="w-full border-[#5a2b2b] text-[#ffb4b4] hover:bg-[#2a1515]"
+                  className="w-full border-neutral-700 text-neutral-200 hover:bg-neutral-900"
                 >
                   {busyDay === "all" ? "Wiping…" : "Wipe all forecast days"}
                 </Button>
                 {manageMessage && (
-                  <p className="text-sm text-[#9fe0c5]">{manageMessage}</p>
+                  <p className="text-sm text-neutral-300">{manageMessage}</p>
                 )}
                 {manageError && (
-                  <p className="text-sm text-[#ffb4b4]">{manageError}</p>
+                  <p className="text-sm text-red-400">{manageError}</p>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="border-[#1e3a44] bg-[#0b1c24] text-[#eef6f7]">
+            <Card className="border-neutral-800 bg-neutral-950 text-[#fafafa]">
               <CardHeader>
                 <CardTitle>Upload forecast</CardTitle>
-                <CardDescription className="text-[#9db8c0]">
+                <CardDescription className="text-neutral-400">
                   Choose which day slot (1–{MAX_FORECAST_DAYS}) this upload
                   should land on. Extra days in the file fill the following
                   slots. Maximum outlook range is {MAX_FORECAST_DAYS} days.
@@ -328,7 +330,7 @@ export function AdminPanel() {
                     id="targetDay"
                     value={targetDay}
                     onChange={(e) => setTargetDay(Number(e.target.value))}
-                    className="flex h-9 w-full rounded-md border border-[#1e3a44] bg-[#07141a] px-3 text-sm text-[#eef6f7] outline-none focus-visible:ring-2 focus-visible:ring-[#3ec4c0]"
+                    className="flex h-9 w-full rounded-md border border-neutral-800 bg-black px-3 text-sm text-[#fafafa] outline-none focus-visible:ring-2 focus-visible:ring-white"
                   >
                     {DAY_OPTIONS.map((day) => (
                       <option key={day} value={day}>
@@ -337,13 +339,13 @@ export function AdminPanel() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-[#6f8b93]">
+                  <p className="text-xs text-neutral-500">
                     Example: pick Day 2 to place the first outlook in the file as
                     tomorrow. Later days in the file become Day 3, 4, …
                   </p>
                 </div>
 
-                <label className="flex items-start gap-3 text-sm text-[#c9e6e3]">
+                <label className="flex items-start gap-3 text-sm text-neutral-300">
                   <input
                     type="checkbox"
                     checked={replaceAll}
@@ -370,11 +372,11 @@ export function AdminPanel() {
                   }}
                   className={`flex cursor-pointer flex-col items-center justify-center border border-dashed px-4 py-12 text-center transition ${
                     dragOver
-                      ? "border-[#3ec4c0] bg-[#123039]"
-                      : "border-[#2d5560] bg-[#07141a]"
+                      ? "border-white bg-neutral-900"
+                      : "border-neutral-700 bg-black"
                   }`}
                 >
-                  <span className="text-sm text-[#c9e6e3]">
+                  <span className="text-sm text-neutral-300">
                     {uploading
                       ? "Uploading…"
                       : "Drop JSON here or click to choose a file"}
@@ -392,12 +394,12 @@ export function AdminPanel() {
                   />
                 </label>
                 {uploadMessage && (
-                  <p className="text-sm text-[#9fe0c5]">{uploadMessage}</p>
+                  <p className="text-sm text-neutral-300">{uploadMessage}</p>
                 )}
                 {uploadError && (
-                  <p className="text-sm text-[#ffb4b4]">{uploadError}</p>
+                  <p className="text-sm text-red-400">{uploadError}</p>
                 )}
-                <p className="text-xs text-[#6f8b93]">
+                <p className="text-xs text-neutral-500">
                   PLACEHOLDER legend entries are removed automatically on upload.
                 </p>
               </CardContent>

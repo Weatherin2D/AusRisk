@@ -17,7 +17,7 @@ function swatchBackground(item: DisplayLegendItem): React.CSSProperties {
     return {
       ...base,
       backgroundImage:
-        "repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(17,24,39,0.55) 3px, rgba(17,24,39,0.55) 5px)",
+        "repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(0,0,0,0.55) 3px, rgba(0,0,0,0.55) 5px)",
     };
   }
 
@@ -25,7 +25,7 @@ function swatchBackground(item: DisplayLegendItem): React.CSSProperties {
     return {
       ...base,
       backgroundImage:
-        "repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(17,24,39,0.55) 3px, rgba(17,24,39,0.55) 5px), repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(17,24,39,0.45) 3px, rgba(17,24,39,0.45) 5px)",
+        "repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(0,0,0,0.55) 3px, rgba(0,0,0,0.55) 5px), repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.45) 3px, rgba(0,0,0,0.45) 5px)",
     };
   }
 
@@ -35,7 +35,7 @@ function swatchBackground(item: DisplayLegendItem): React.CSSProperties {
 export function RiskLegend({ items }: Props) {
   if (!items.length) {
     return (
-      <div className="text-sm text-[#9db8c0]">
+      <div className="text-sm text-neutral-500">
         No risk categories in this outlook.
       </div>
     );
@@ -46,11 +46,11 @@ export function RiskLegend({ items }: Props) {
       {items.map((item) => (
         <li key={item.id} className="flex items-center gap-3">
           <span
-            className="h-5 w-8 shrink-0 border border-black/80"
+            className="h-5 w-8 shrink-0 border border-neutral-700"
             style={swatchBackground(item)}
             aria-hidden="true"
           />
-          <span className="text-sm font-semibold tracking-wide text-[#f2fbfb]">
+          <span className="text-sm font-medium tracking-wide text-neutral-100">
             {item.label}
           </span>
         </li>

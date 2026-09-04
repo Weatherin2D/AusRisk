@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans), "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-sans), "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-heading: var(--font-display), Georgia, serif;
+  --font-heading: var(--font-display), "Syne", ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,38 +49,38 @@
 }
 
 :root {
-  --background: #07141a;
-  --foreground: #eef6f7;
-  --card: #0b1c24;
-  --card-foreground: #eef6f7;
-  --popover: #0b1c24;
-  --popover-foreground: #eef6f7;
-  --primary: #2f9e9a;
-  --primary-foreground: #041014;
-  --secondary: #123039;
-  --secondary-foreground: #eef6f7;
-  --muted: #123039;
-  --muted-foreground: #9db8c0;
-  --accent: #123039;
-  --accent-foreground: #eef6f7;
-  --destructive: #c44b4b;
-  --border: #1e3a44;
-  --input: #1e3a44;
-  --ring: #3ec4c0;
-  --chart-1: #90d89d;
-  --chart-2: #ecf643;
-  --chart-3: #ffbc21;
-  --chart-4: #f80404;
-  --chart-5: #fe3ab0;
-  --radius: 0.35rem;
-  --sidebar: #0b1c24;
-  --sidebar-foreground: #eef6f7;
-  --sidebar-primary: #2f9e9a;
-  --sidebar-primary-foreground: #041014;
-  --sidebar-accent: #123039;
-  --sidebar-accent-foreground: #eef6f7;
-  --sidebar-border: #1e3a44;
-  --sidebar-ring: #3ec4c0;
+  --background: #050505;
+  --foreground: #fafafa;
+  --card: #0c0c0c;
+  --card-foreground: #fafafa;
+  --popover: #0c0c0c;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #050505;
+  --secondary: #171717;
+  --secondary-foreground: #fafafa;
+  --muted: #171717;
+  --muted-foreground: #a3a3a3;
+  --accent: #171717;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --border: #262626;
+  --input: #262626;
+  --ring: #fafafa;
+  --chart-1: #fafafa;
+  --chart-2: #a3a3a3;
+  --chart-3: #737373;
+  --chart-4: #525252;
+  --chart-5: #262626;
+  --radius: 0.25rem;
+  --sidebar: #0c0c0c;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #fafafa;
+  --sidebar-primary-foreground: #050505;
+  --sidebar-accent: #171717;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #262626;
+  --sidebar-ring: #fafafa;
 }
 
 @layer base {
@@ -96,14 +96,25 @@
 }
 
 .leaflet-container {
-  background: #0b1418;
+  background: #e5e5e5;
   font: inherit;
+  filter: grayscale(0.15) contrast(1.05);
+}
+
+.leaflet-control-zoom a {
+  background: #0a0a0a !important;
+  color: #fafafa !important;
+  border-color: #262626 !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: #171717 !important;
 }
 
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -112,9 +123,9 @@
 }
 
 .animate-fade-up {
-  animation: fade-up 0.55s ease-out both;
+  animation: fade-up 0.5s ease-out both;
 }
 
 .animate-fade-up-delay {
-  animation: fade-up 0.7s ease-out 0.08s both;
+  animation: fade-up 0.65s ease-out 0.06s both;
 }

@@ -78,6 +78,8 @@ export async function DELETE(request: Request) {
     });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Failed to remove days" }, { status: 500 });
+    const message =
+      error instanceof Error ? error.message : "Failed to remove days";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

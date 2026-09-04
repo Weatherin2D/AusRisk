@@ -35,22 +35,22 @@ function swatchBackground(item: DisplayLegendItem): React.CSSProperties {
 export function RiskLegend({ items }: Props) {
   if (!items.length) {
     return (
-      <div className="text-sm text-slate-400">
+      <div className="text-sm text-[#9db8c0]">
         No risk categories in this outlook.
       </div>
     );
   }
 
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="flex flex-col gap-2.5">
       {items.map((item) => (
         <li key={item.id} className="flex items-center gap-3">
           <span
-            className="h-5 w-8 shrink-0 border border-neutral-900"
+            className="h-5 w-8 shrink-0 border border-black/80"
             style={swatchBackground(item)}
             aria-hidden="true"
           />
-          <span className="text-sm font-medium tracking-wide text-teal-50">
+          <span className="text-sm font-semibold tracking-wide text-[#f2fbfb]">
             {item.label}
           </span>
         </li>

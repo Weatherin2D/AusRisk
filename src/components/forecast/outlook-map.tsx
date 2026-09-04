@@ -22,11 +22,20 @@ type OutlookMapProps = {
   legend: DisplayLegendItem[];
 };
 
-function FitFeatures({ features }: { features: DisplayFeature[] }) {
+function FitFeatures({
+  features,
+  mapView,
+}: {
+  features: DisplayFeature[];
+  mapView: MapView;
+}) {
   const map = useMap();
 
   useEffect(() => {
-    if (!features.length) return;
+    if (!features.length) {
+      map.setView(mapView.center, mapView.zoom, { animate: false });
+      return;
+    }
     const layer = L.geoJSON(
       {
         type: "FeatureCollection",
@@ -39,9 +48,11 @@ function FitFeatures({ features }: { features: DisplayFeature[] }) {
     );
     const bounds = layer.getBounds();
     if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.12), { animate: true });
+      map.fitBounds(bounds.pad(0.15), { animate: false, maxZoom: 8 });
+    } else {
+      map.setView(mapView.center, mapView.zoom, { animate: false });
     }
-  }, [features, map]);
+  }, [features, map, mapView.center, mapView.zoom]);
 
   return null;
 }
@@ -195,7 +206,7 @@ export function OutlookMap({ mapView, features, legend }: OutlookMapProps) {
         maxZoom={19}
       />
       <HatchPatterns legend={legend} />
-      <FitFeatures features={features} />
+      <FitFeatures features={features} mapView={mapView} />
       <GeoJSON
         key={features.map((f) => f.id).join(",") || "empty"}
         data={geojson as GeoJSON.FeatureCollection}

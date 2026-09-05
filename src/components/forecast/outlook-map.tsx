@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -137,8 +137,13 @@ function FitFeatures({
   mapView: MapView;
 }) {
   const map = useMap();
+  const didInitialFit = useRef(false);
 
   useEffect(() => {
+    // Fit once on first load only — keep pan/zoom when the user switches days.
+    if (didInitialFit.current) return;
+    didInitialFit.current = true;
+
     if (!features.length) {
       map.setView(mapView.center, mapView.zoom, { animate: false });
       return;
@@ -295,6 +300,7 @@ export function OutlookMap({ mapView, features, legend: _legend }: OutlookMapPro
 
   return (
     <MapContainer
+      key="ausrisk-outlook-map"
       center={mapView.center}
       zoom={mapView.zoom}
       className="h-full w-full rounded-none"

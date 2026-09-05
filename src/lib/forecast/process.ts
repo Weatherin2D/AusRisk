@@ -318,7 +318,7 @@ function clampDay(n: number): number {
 
 /**
  * Publish modes:
- * - replace: wipe cycle and place file days starting at targetStartDay
+ * - replace: write file days starting at targetStartDay; keep other existing slots
  * - single: put only the first file day into targetStartDay; keep other slots
  */
 export function normalizeForecastOnUpload(
@@ -352,16 +352,16 @@ export function normalizeForecastOnUpload(
 
   const mergedDays: Record<string, ForecastDay> = {};
 
-  if (mode === "single") {
-    if (options.existing?.forecastCycle?.days) {
-      for (const [key, day] of Object.entries(options.existing.forecastCycle.days)) {
-        const n = day.day ?? Number(key);
-        if (!Number.isFinite(n) || n < 1 || n > MAX_FORECAST_DAYS) continue;
-        if (n === targetStartDay) continue;
-        mergedDays[String(n)] = stampDayDates(day, n, today);
-      }
+  // Always start from any already-published days so uploads do not wipe the cycle.
+  if (options.existing?.forecastCycle?.days) {
+    for (const [key, day] of Object.entries(options.existing.forecastCycle.days)) {
+      const n = day.day ?? Number(key);
+      if (!Number.isFinite(n) || n < 1 || n > MAX_FORECAST_DAYS) continue;
+      mergedDays[String(n)] = stampDayDates(day, n, today);
     }
-    // Prefer the day that has AusRisk custom layers when updating a single slot
+  }
+
+  if (mode === "single") {
     const preferred =
       incoming.find((item) =>
         Boolean(
@@ -376,7 +376,7 @@ export function normalizeForecastOnUpload(
       today,
     );
   } else {
-    // Full replace: only days from this file, starting at targetStartDay
+    // Replace the slots this file covers; leave every other published day alone.
     let assigned = 0;
     for (const item of incoming) {
       const newDay = targetStartDay + assigned;

@@ -123,7 +123,7 @@ export function AdminPanel() {
       setUploadMessage(
         publishMode === "single"
           ? `Updated Day ${json.targetStartDay ?? targetDay} only. Active days: ${dayList || json.dayCount}.`
-          : `Replaced outlook starting at Day ${json.targetStartDay ?? targetDay}. Active days: ${dayList || json.dayCount}.`,
+          : `Published from Day ${json.targetStartDay ?? targetDay}. Other existing days were kept. Active days: ${dayList || json.dayCount}.`,
       );
       await refreshDays();
     } catch {
@@ -363,9 +363,10 @@ export function AdminPanel() {
                         Replace outlook
                       </span>
                       <span className="mt-0.5 block text-xs text-neutral-500">
-                        Clears previous days. File Day 1 lands on the selected
-                        slot; extra file days fill the next slots only (no
-                        leftover Day 3 from old publishes).
+                        Writes this file into the selected day slot (and the
+                        following slots for multi-day files). Days you already
+                        published outside those slots are kept. Use Wipe all
+                        first for a clean slate.
                       </span>
                     </span>
                   </label>
@@ -382,8 +383,8 @@ export function AdminPanel() {
                         Update one day only
                       </span>
                       <span className="mt-0.5 block text-xs text-neutral-500">
-                        Puts the AusRisk layer from the file into the selected
-                        day slot and leaves other days untouched.
+                        Puts only the AusRisk layer from the file into the
+                        selected day slot and leaves every other day untouched.
                       </span>
                     </span>
                   </label>

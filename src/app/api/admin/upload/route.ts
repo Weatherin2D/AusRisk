@@ -84,8 +84,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const existing =
-      mode === "single" ? await readStoredForecast() : null;
+    const existing = await readStoredForecast();
     const normalized = normalizeForecastOnUpload(parsed, {
       targetStartDay,
       existing,

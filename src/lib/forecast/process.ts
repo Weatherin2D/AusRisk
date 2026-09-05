@@ -175,12 +175,6 @@ function featuresFromCustomLayer(layer: CustomLayer): {
 } {
   const categories = stripPlaceholderCategories(layer.categories ?? []);
   const byId = new Map(categories.map((c) => [c.id, c]));
-  const legend: DisplayLegendItem[] = categories.map((c) => ({
-    id: c.id,
-    label: c.label,
-    order: c.order,
-    style: c.style,
-  }));
 
   const features: DisplayFeature[] = [];
   for (const feature of layer.features ?? []) {
@@ -205,9 +199,15 @@ function featuresFromCustomLayer(layer: CustomLayer): {
   features.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
 
   const used = new Set(features.map((f) => f.categoryId));
-  const usedLegend = legend.filter((item) => used.has(item.id));
+  const legend: DisplayLegendItem[] = categories.map((c) => ({
+    id: c.id,
+    label: c.label,
+    order: c.order,
+    style: c.style,
+    used: used.has(c.id),
+  }));
 
-  return { features, legend: usedLegend.length ? usedLegend : legend };
+  return { features, legend };
 }
 
 const CATEGORICAL_ORDER = ["TSTM", "MRGL", "SLGT", "ENH", "MDT", "HIGH"] as const;
@@ -244,6 +244,7 @@ function featuresFromCategorical(day: ForecastDay): {
         label,
         order: resolvedOrder,
         style,
+        used: true,
       });
     }
 

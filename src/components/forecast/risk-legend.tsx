@@ -1,6 +1,7 @@
 "use client";
 
 import type { DisplayLegendItem } from "@/lib/forecast/types";
+import { cn } from "@/lib/utils";
 
 type Props = {
   items: DisplayLegendItem[];
@@ -53,18 +54,35 @@ export function RiskLegend({ items }: Props) {
 
   return (
     <ul className="flex flex-col gap-2.5">
-      {items.map((item) => (
-        <li key={item.id} className="flex items-center gap-3">
-          <span
-            className="h-5 w-8 shrink-0 border border-neutral-700"
-            style={swatchBackground(item)}
-            aria-hidden="true"
-          />
-          <span className="text-sm font-medium tracking-wide text-neutral-100">
-            {item.label}
-          </span>
-        </li>
-      ))}
+      {items.map((item) => {
+        const used = item.used !== false;
+        return (
+          <li
+            key={item.id}
+            className={cn(
+              "flex items-center gap-3",
+              !used && "opacity-55",
+            )}
+          >
+            <span
+              className={cn(
+                "h-5 w-8 shrink-0",
+                used ? "border-2 border-white" : "border border-neutral-700",
+              )}
+              style={swatchBackground(item)}
+              aria-hidden="true"
+            />
+            <span
+              className={cn(
+                "text-sm font-medium tracking-wide",
+                used ? "text-neutral-100" : "text-neutral-500",
+              )}
+            >
+              {item.label}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

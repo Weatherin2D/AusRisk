@@ -104,6 +104,8 @@ export type DisplayLegendItem = {
   label: string;
   order: number;
   style: CategoryStyle;
+  /** True when at least one polygon on this day uses the category. */
+  used: boolean;
 };
 
 export type RolledDay = {
